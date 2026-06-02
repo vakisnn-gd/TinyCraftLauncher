@@ -9,3 +9,17 @@ release/
 
 # Local launcher runtime data
 launcher.properties
+
+# Logs and crash dumps
+*.log
+hs_err_pid*
+replay_pid*
+
+# Misc Java IDE artifacts
+*.ctxt
+.mtj.tmp/
+*.war
+*.nar
+*.ear
+*.tar.gz
+*.rar
