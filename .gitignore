@@ -1,0 +1,11 @@
+# Launcher build output
+app/
+build/
+out/
+release/
+*.class
+*.jar
+*.zip
+
+# Local launcher runtime data
+launcher.properties
