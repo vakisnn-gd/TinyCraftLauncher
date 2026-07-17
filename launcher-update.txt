@@ -1,0 +1,2 @@
+# version|description|https-url|sha256
+v1.2.1|Безопасное обновление TinyCraft Launcher|https://github.com/vakisnn-gd/TinyCraftLauncher/releases/download/launcher-v1.2.1/TinyCraftLauncher-windows.zip|03c5223537d7aa16ff30b54ea59c7b3e5ff09c41331dff51b8a6f0c74f4adf3a

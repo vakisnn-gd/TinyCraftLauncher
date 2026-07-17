@@ -1,6 +1,6 @@
 # TinyCraftLauncher
 
-Отдельная папка для разработки лаунчера TinyCraft.
+Отдельный Windows-лаунчер для игры [TinyCraft](https://github.com/vakisnn-gd/TinyCraft). Код игры и её релизы находятся в репозитории TinyCraft.
 
 ## Быстрый старт
 

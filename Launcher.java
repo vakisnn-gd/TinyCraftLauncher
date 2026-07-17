@@ -33,6 +33,7 @@ import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.RenderingHints;
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
@@ -87,20 +88,39 @@ import java.util.zip.ZipInputStream;
  * там уже лежит TinyCraft.jar, поэтому JDK игроку не нужен.
  */
 public class Launcher {
-    private static final String GAME_FOLDER_NAME = "TinyCraft";
     private static final String GAME_JAR_NAME = "TinyCraft.jar";
     private static final String MAIN_CLASS = "TinyCraft";
+    private static final int MIN_SUPPORTED_GAME_JAVA_RELEASE = 8;
+    private static final int MAX_SUPPORTED_GAME_JAVA_RELEASE = 26;
+    private static final int IO_BUFFER_SIZE = 64 * 1024;
+    private static final long PROGRESS_UPDATE_INTERVAL_NANOS = 150L * 1000L * 1000L;
+    private static final long MAX_DOWNLOAD_BYTES = 512L * 1024L * 1024L;
+    private static final long MAX_EXTRACTED_BYTES = 2L * 1024L * 1024L * 1024L;
+    private static final long MAX_EXTRACTED_FILE_BYTES = 1024L * 1024L * 1024L;
+    private static final int MAX_ARCHIVE_ENTRIES = 50000;
     private static final String VERSIONS_DIRECTORY_NAME = "versions";
     private static final String LOGS_DIRECTORY_NAME = "logs";
     private static final String LAUNCHER_SETTINGS_FILE = "launcher.properties";
-    private static final String LAUNCHER_VERSION = "v1.2";
+    private static final String LAUNCHER_VERSION = "v1.2.1";
     private static final String LAUNCHER_RELEASES_URL = "https://github.com/vakisnn-gd/TinyCraftLauncher/releases";
-    private static final String LAUNCHER_UPDATE_MANIFEST_URL = "";
+    private static final String LAUNCHER_UPDATE_MANIFEST_URL =
+            "https://raw.githubusercontent.com/vakisnn-gd/TinyCraftLauncher/main/launcher-update.txt";
     private static final String LAUNCHER_UPDATE_MANIFEST_NAME = "launcher-update.txt";
     private static final String KEY_LAST_VERSION = "lastVersion";
     private static final String KEY_PLAYER_NAME = "playerName";
     private static final String KEY_KEEP_OPEN = "keepLauncherOpen";
     private static final String KEY_THEME = "theme";
+    private static final String[] PRESERVED_VERSION_DATA = {
+            "saves",
+            "backups",
+            "logs",
+            "profile.properties",
+            "options.txt",
+            "server.properties",
+            "ops.json",
+            "whitelist.json",
+            "banned-players.json"
+    };
     private static final Color DEEP_GRASS = new Color(34, 84, 47);
     private static final Color GRASS = new Color(76, 155, 72);
     private static final Color LIGHT_GRASS = new Color(129, 194, 97);
@@ -111,8 +131,8 @@ public class Launcher {
     /*
      * Позже можно вынести список версий в отдельный файл на сайте/GitHub.
      * Формат manifest-файла:
-     * v0.2 Final|release|8|https://github.com/vakisnn-gd/TinyCraft/archive/refs/tags/v0.2.zip
-     * v0.1|release|17|https://github.com/vakisnn-gd/TinyCraft/archive/refs/tags/v0.1.zip
+     * id|name|type|java|mainClass|sha256|https-url
+     * Для сетевой загрузки SHA-256 обязателен.
      *
      * Пока строка пустая, лаунчер сначала ищет bundled manifest
      * launcher-versions/versions.txt рядом с собой, затем использует
@@ -129,26 +149,26 @@ public class Launcher {
      * GitHub сам отдает zip для каждого тега по такому адресу.
      */
     private static final GameVersion[] LOCAL_VERSIONS = {
-            new GameVersion("v0.2.1", "v0.2.1", "release", 8, MAIN_CLASS, "", releaseAssetUrl("v0.2.1", "TinyCraft-v0.2.1-windows.zip")),
-            new GameVersion("v0.2-final", "v0.2 Final", "release", 8, MAIN_CLASS, "", releaseAssetUrl("v0.2", "TinyCraft-v0.2-final-windows.zip")),
-            new GameVersion("v0.2-snapshot8", "v0.2 Snapshot 8", "snapshot", 8, MAIN_CLASS, "", releaseAssetUrl("v0.2-snapshot8", "TinyMinecraft-v0.2-snapshot8-windows.zip")),
-            new GameVersion("v0.2-snapshot7", "v0.2 Snapshot 7", "snapshot", 17, MAIN_CLASS, "", releaseAssetUrl("v0.2-snapshot7", "TinyMinecraft-v0.2-snapshot7-windows.zip")),
-            new GameVersion("v0.2-snapshot6", "v0.2 Snapshot 6", "snapshot", 17, MAIN_CLASS, "", releaseAssetUrl("v0.2-snapshot6", "TinyMinecraft-v0.2-snapshot6-windows.zip")),
-            new GameVersion("v0.2-snapshot5", "v0.2 Snapshot 5", "snapshot", 17, MAIN_CLASS, "", releaseAssetUrl("v0.2-snapshot5", "TinyMinecraft-v0.2-snapshot5-windows.zip")),
-            new GameVersion("v0.2-snapshot4", "v0.2 Snapshot 4", "snapshot", 17, MAIN_CLASS, "", releaseAssetUrl("v0.2-snapshot4", "TinyMinecraft-v0.2-snapshot4-windows.zip")),
-            new GameVersion("v0.2-snapshot3", "v0.2 Snapshot 3", "snapshot", 17, MAIN_CLASS, "", releaseAssetUrl("snapshot-0.2-v3", "TinyMinecraft-v0.2-snapshot3-windows.zip")),
-            new GameVersion("v0.2-snapshot2", "v0.2 Snapshot 2", "snapshot", 17, MAIN_CLASS, "", releaseAssetUrl("v0.2-snapshot2", "TinyMinecraft-v0.2-snapshot2-windows.zip")),
-            new GameVersion("v0.2-snapshot1", "v0.2 Snapshot 1", "snapshot", 17, "TinyMinecraft", "", releaseAssetUrl("v0.2-snapshot1", "TinyMinecraft-v0.2-snapshot1-windows.zip")),
-            new GameVersion("v0.1", "v0.1", "release", 17, "TinyMinecraft", "", releaseAssetUrl("v0.1", "TinyMinecraft-v0.1-windows.zip")),
-            new GameVersion("v0.0.8", "v0.0.8", "classic", 17, "TinyMinecraft", "", releaseAssetUrl("v0.0.8", "TinyMinecraft-v0.0.8-windows.zip")),
-            new GameVersion("v0.0.7", "v0.0.7", "classic", 17, "TinyMinecraft", "", releaseAssetUrl("v0.0.7", "TinyMinecraft-v0.0.7-windows.zip")),
-            new GameVersion("v0.0.6", "v0.0.6", "classic", 17, "TinyMinecraft", "", releaseAssetUrl("v0.0.6", "TinyMinecraft-v0.0.6-windows.zip")),
-            new GameVersion("v0.0.5", "v0.0.5", "classic", 17, "TinyMinecraft", "", releaseAssetUrl("v0.0.5", "TinyMinecraft-v0.0.5-windows.zip")),
-            new GameVersion("v0.0.4", "v0.0.4", "classic", 17, "TinyMinecraft", "", releaseAssetUrl("v0.0.4", "TinyMinecraft-v0.0.4-windows.zip")),
-            new GameVersion("v0.0.3", "v0.0.3", "classic", 17, "TinyMinecraft", "", releaseAssetUrl("v0.0.3", "TinyMinecraft-v0.0.3-windows.zip")),
-            new GameVersion("v0.0.2", "v0.0.2", "classic", 17, "TinyMinecraft", "", releaseAssetUrl("v0.0.2", "TinyMinecraft-v0.0.2-windows.zip")),
-            new GameVersion("v0.0.1", "v0.0.1", "classic", 17, "TinyMinecraft", "", releaseAssetUrl("v0.0.1", "TinyMinecraft-v0.0.1-windows.zip")),
-            new GameVersion("v0.0.0", "v0.0.0", "classic", 17, "TinyMinecraft", "", releaseAssetUrl("v0.0.0", "TinyMinecraft-v0.0.0-windows.zip"))
+            new GameVersion("v0.2.1", "v0.2.1", "release", 8, MAIN_CLASS, "77f362e3100ed568268c51b4a22171d7adcd5fa447dd7a6e32c6a6a70d93367a", releaseAssetUrl("v0.2.1", "TinyCraft-v0.2.1-windows.zip")),
+            new GameVersion("v0.2-final", "v0.2 Final", "release", 8, MAIN_CLASS, "0253e6367e94025e799b32c4c7de99d152eb91d8a22c0ab3c413fe42ee48d88e", releaseAssetUrl("v0.2", "TinyCraft-v0.2-final-windows.zip")),
+            new GameVersion("v0.2-snapshot8", "v0.2 Snapshot 8", "snapshot", 8, MAIN_CLASS, "8b893bc7914fc5708787bd5bbc70cc03e486e9339057da4b166fdca72dca1164", releaseAssetUrl("v0.2-snapshot8", "TinyMinecraft-v0.2-snapshot8-windows.zip")),
+            new GameVersion("v0.2-snapshot7", "v0.2 Snapshot 7", "snapshot", 17, MAIN_CLASS, "0de8e79d6dacadf7603ff0d484433c17831bcedf2f452d69bab5d6991556114b", releaseAssetUrl("v0.2-snapshot7", "TinyMinecraft-v0.2-snapshot7-windows.zip")),
+            new GameVersion("v0.2-snapshot6", "v0.2 Snapshot 6", "snapshot", 17, MAIN_CLASS, "6ea9304795c98c5ca887c877db90ae154901497d702ee9e5846c0fe1a3a1a321", releaseAssetUrl("v0.2-snapshot6", "TinyMinecraft-v0.2-snapshot6-windows.zip")),
+            new GameVersion("v0.2-snapshot5", "v0.2 Snapshot 5", "snapshot", 17, MAIN_CLASS, "26823d3b212dbb338006d7a697c8b233616c9ff824828e415000bffb016ad266", releaseAssetUrl("v0.2-snapshot5", "TinyMinecraft-v0.2-snapshot5-windows.zip")),
+            new GameVersion("v0.2-snapshot4", "v0.2 Snapshot 4", "snapshot", 17, MAIN_CLASS, "d4f5acfad243e263d8977a724cebf224d4b075723389ca04a958e28e144c5f95", releaseAssetUrl("v0.2-snapshot4", "TinyMinecraft-v0.2-snapshot4-windows.zip")),
+            new GameVersion("v0.2-snapshot3", "v0.2 Snapshot 3", "snapshot", 17, MAIN_CLASS, "677795e3acbaa40a27c9993640de90f155d0d10f35058e0aa5b15847e67ae9da", releaseAssetUrl("snapshot-0.2-v3", "TinyMinecraft-v0.2-snapshot3-windows.zip")),
+            new GameVersion("v0.2-snapshot2", "v0.2 Snapshot 2", "snapshot", 17, MAIN_CLASS, "dfb4943984b5f660c7240de350f564fd3edaf1a0ed1160bde26e16f65ef21075", releaseAssetUrl("v0.2-snapshot2", "TinyMinecraft-v0.2-snapshot2-windows.zip")),
+            new GameVersion("v0.2-snapshot1", "v0.2 Snapshot 1", "snapshot", 17, "TinyMinecraft", "2704823dc8022308572b3e5518962273766fb2e2a3c17b9f26bb8e489ca39130", releaseAssetUrl("v0.2-snapshot1", "TinyMinecraft-v0.2-snapshot1-windows.zip")),
+            new GameVersion("v0.1", "v0.1", "release", 17, "TinyMinecraft", "b5e38bdf802f5e7e1296a37568ff18f937403dc90b9acaf0e441636c4adcd11d", releaseAssetUrl("v0.1", "TinyMinecraft-v0.1-windows.zip")),
+            new GameVersion("v0.0.8", "v0.0.8", "classic", 17, "TinyMinecraft", "d8942e91a9858c4248f22a65df27c48556cd218467756842b07f514b90b583b8", releaseAssetUrl("v0.0.8", "TinyMinecraft-v0.0.8-windows.zip")),
+            new GameVersion("v0.0.7", "v0.0.7", "classic", 17, "TinyMinecraft", "1b67d66366d3f32147a1bd4cc195e32712c75556d3b5052bf0ee92d1c0e1e688", releaseAssetUrl("v0.0.7", "TinyMinecraft-v0.0.7-windows.zip")),
+            new GameVersion("v0.0.6", "v0.0.6", "classic", 17, "TinyMinecraft", "c337e8f49bf15b199b177383bf33d53b56e29b2bc78edb157b64dd6fc094073c", releaseAssetUrl("v0.0.6", "TinyMinecraft-v0.0.6-windows.zip")),
+            new GameVersion("v0.0.5", "v0.0.5", "classic", 17, "TinyMinecraft", "7094782dc74eedfd7aeb3e90e21efd9e69724e6e5dd21ba03796f3f438e6affb", releaseAssetUrl("v0.0.5", "TinyMinecraft-v0.0.5-windows.zip")),
+            new GameVersion("v0.0.4", "v0.0.4", "classic", 17, "TinyMinecraft", "02b7333688bf7c1c45e2183f3e80b361214a7f7c8840a009727bd3d53b62d1cc", releaseAssetUrl("v0.0.4", "TinyMinecraft-v0.0.4-windows.zip")),
+            new GameVersion("v0.0.3", "v0.0.3", "classic", 17, "TinyMinecraft", "806e0bbaf4f190fb8ca35255e1a672aa98ef79b29ef60f97f8906565f7276557", releaseAssetUrl("v0.0.3", "TinyMinecraft-v0.0.3-windows.zip")),
+            new GameVersion("v0.0.2", "v0.0.2", "classic", 17, "TinyMinecraft", "80cfe5020bcf043d708a662c250ef8a8e2f3939b02d4ed623d66dcfae6acf7ae", releaseAssetUrl("v0.0.2", "TinyMinecraft-v0.0.2-windows.zip")),
+            new GameVersion("v0.0.1", "v0.0.1", "classic", 17, "TinyMinecraft", "a65d1345826a3832c85f550cd53b94eb4cbd472a93e13c46ac2f1cb9c299c854", releaseAssetUrl("v0.0.1", "TinyMinecraft-v0.0.1-windows.zip")),
+            new GameVersion("v0.0.0", "v0.0.0", "classic", 17, "TinyMinecraft", "191cbce9dd2802f504b123b4fb2e42d625e8803894fe3000ea36df3df6730d1c", releaseAssetUrl("v0.0.0", "TinyMinecraft-v0.0.0-windows.zip"))
     };
 
     private final JFrame frame = new JFrame("TinyCraft Launcher");
@@ -172,6 +192,8 @@ public class Launcher {
     private int themeIndex = 0;
     private boolean loadingVersions;
     private InstallAndRunWorker currentWorker;
+    private LauncherUpdateInfo availableLauncherUpdate;
+    private boolean launcherUpdateInProgress;
     private String launcherUpdateUrl = LAUNCHER_RELEASES_URL;
 
     public static void main(String[] args) {
@@ -293,7 +315,7 @@ public class Launcher {
         launcherInfoLabel.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
             public void mouseClicked(java.awt.event.MouseEvent e) {
-                openLauncherReleasesPage();
+                handleLauncherUpdateClick();
             }
         });
         c.gridx = 0;
@@ -456,6 +478,7 @@ public class Launcher {
                 try {
                     LauncherUpdateInfo info = get();
                     if (info == null) {
+                        availableLauncherUpdate = null;
                         launcherInfoLabel.setText("Launcher " + LAUNCHER_VERSION);
                         launcherInfoLabel.setToolTipText(LAUNCHER_RELEASES_URL);
                         launcherUpdateUrl = LAUNCHER_RELEASES_URL;
@@ -469,13 +492,17 @@ public class Launcher {
                     launcherInfoLabel.setToolTipText(tooltip);
 
                     if (info.updateAvailable) {
+                        availableLauncherUpdate = info;
                         launcherInfoLabel.setText("Launcher " + LAUNCHER_VERSION + " -> " + info.version + " available");
                         launcherInfoLabel.setForeground(new Color(255, 214, 153));
+                        offerLauncherUpdate(info);
                     } else {
+                        availableLauncherUpdate = null;
                         launcherInfoLabel.setText("Launcher " + LAUNCHER_VERSION);
                         launcherInfoLabel.setForeground(new Color(230, 218, 180));
                     }
                 } catch (Exception ignored) {
+                    availableLauncherUpdate = null;
                     launcherInfoLabel.setText("Launcher " + LAUNCHER_VERSION);
                     launcherInfoLabel.setToolTipText(LAUNCHER_RELEASES_URL);
                     launcherUpdateUrl = LAUNCHER_RELEASES_URL;
@@ -485,28 +512,31 @@ public class Launcher {
     }
 
     private LauncherUpdateInfo loadLauncherUpdateInfo() throws IOException {
+        LauncherUpdateInfo newest = null;
         File bundledManifest = findBundledLauncherUpdateManifest();
         if (bundledManifest.isFile()) {
-            LauncherUpdateInfo bundled = downloadLauncherUpdateInfo(bundledManifest.toURI().toString());
-            if (bundled != null) {
-                return bundled;
+            try {
+                newest = downloadLauncherUpdateInfo(bundledManifest.toURI().toString());
+            } catch (IOException ignored) {
             }
         }
 
-        if (LAUNCHER_UPDATE_MANIFEST_URL.trim().isEmpty()) {
-            return null;
+        if (!LAUNCHER_UPDATE_MANIFEST_URL.trim().isEmpty()) {
+            try {
+                LauncherUpdateInfo remote = downloadLauncherUpdateInfo(LAUNCHER_UPDATE_MANIFEST_URL);
+                if (remote != null && (newest == null || compareLauncherVersions(remote.version, newest.version) > 0)) {
+                    newest = remote;
+                }
+            } catch (IOException ignored) {
+            }
         }
-
-        LauncherUpdateInfo remote = downloadLauncherUpdateInfo(LAUNCHER_UPDATE_MANIFEST_URL);
-        return remote;
+        return newest;
     }
 
     private static LauncherUpdateInfo downloadLauncherUpdateInfo(String manifestUrl) throws IOException {
-        URI manifestUri = URI.create(manifestUrl);
-        URLConnection connection = manifestUri.toURL().openConnection();
-        connection.setConnectTimeout(15000);
-        connection.setReadTimeout(30000);
-        connection.setRequestProperty("User-Agent", "TinyCraftLauncher/1.0");
+        URI manifestUri = validateDownloadSource(manifestUrl, true);
+        URLConnection connection = openSecureConnection(manifestUrl, true);
+        validateHttpResponse(connection, manifestUrl);
 
         LauncherUpdateInfo newest = null;
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
@@ -518,15 +548,21 @@ public class Launcher {
                 }
 
                 String[] parts = line.split("\\|", -1);
-                if (parts.length < 3) {
-                    continue;
+                if (parts.length < 4) {
+                    throw new IOException("Некорректная запись launcher update manifest: " + line);
                 }
 
+                String downloadUrl = resolveManifestUrl(manifestUri, parts[2].trim());
+                validateDownloadSource(downloadUrl, false);
+                String sha256 = parts[3].trim().toLowerCase(java.util.Locale.ROOT);
+                if (!isValidSha256(sha256)) {
+                    throw new IOException("Некорректный SHA-256 обновления launcher " + parts[0].trim());
+                }
                 LauncherUpdateInfo candidate = new LauncherUpdateInfo(
                         parts[0].trim(),
                         parts[1].trim(),
-                        resolveManifestUrl(manifestUri, parts[2].trim()),
-                        parts.length >= 4 ? parts[3].trim() : "");
+                        downloadUrl,
+                        sha256);
                 if (candidate.version.isEmpty()) {
                     continue;
                 }
@@ -717,6 +753,219 @@ public class Launcher {
         dialog.setSize(new Dimension(760, 560));
         dialog.setLocationRelativeTo(frame);
         dialog.setVisible(true);
+    }
+
+    private void handleLauncherUpdateClick() {
+        LauncherUpdateInfo update = availableLauncherUpdate;
+        if (update == null || !update.updateAvailable) {
+            openLauncherReleasesPage();
+            return;
+        }
+        if (findPackagedApplicationDirectory() == null) {
+            openLauncherReleasesPage();
+            return;
+        }
+        offerLauncherUpdate(update);
+    }
+
+    private void offerLauncherUpdate(LauncherUpdateInfo update) {
+        if (update == null || launcherUpdateInProgress || findPackagedApplicationDirectory() == null) {
+            return;
+        }
+        if (currentWorker != null && !currentWorker.isDone()) {
+            return;
+        }
+        int choice = JOptionPane.showConfirmDialog(frame,
+                "Доступен TinyCraft Launcher " + update.version + ".\n"
+                        + (update.description.isEmpty() ? "" : update.description + "\n")
+                        + "Скачать, проверить SHA-256 и установить обновление?",
+                "Обновление лаунчера", JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE);
+        if (choice != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        File applicationDirectory = findPackagedApplicationDirectory();
+        if (applicationDirectory == null) {
+            openLauncherReleasesPage();
+            return;
+        }
+        launcherUpdateInProgress = true;
+        playButton.setEnabled(false);
+        launcherInfoLabel.setText("Скачивание Launcher " + update.version + "...");
+        new LauncherUpdateWorker(update, applicationDirectory).execute();
+    }
+
+    private final class LauncherUpdateWorker extends SwingWorker<PreparedLauncherUpdate, Void> {
+        private final LauncherUpdateInfo update;
+        private final File applicationDirectory;
+        private int lastProgressValue = -1;
+
+        private LauncherUpdateWorker(LauncherUpdateInfo update, File applicationDirectory) {
+            this.update = update;
+            this.applicationDirectory = applicationDirectory;
+        }
+
+        @Override
+        protected PreparedLauncherUpdate doInBackground() throws Exception {
+            File updateRoot = new File(getLauncherDataDirectory(), "launcher-update");
+            if (!updateRoot.isDirectory() && !updateRoot.mkdirs()) {
+                throw new IOException("Не удалось создать папку обновления: " + updateRoot.getAbsolutePath());
+            }
+            String safeVersion = toVersionId(update.version);
+            File archiveFile = new File(updateRoot, "launcher-" + safeVersion + ".zip");
+            File stagingDirectory = new File(updateRoot, safeVersion + ".install");
+            Files.deleteIfExists(archiveFile.toPath());
+            deleteDirectory(stagingDirectory);
+            if (!stagingDirectory.mkdirs()) {
+                throw new IOException("Не удалось создать папку обновления: " + stagingDirectory.getAbsolutePath());
+            }
+
+            boolean prepared = false;
+            try {
+                updateProgress(2, "Скачивание Launcher " + update.version + "...");
+                downloadSecureFile(update.downloadUrl, update.sha256, archiveFile, new ProgressListener() {
+                    @Override
+                    public void onProgress(long currentBytes, long totalBytes) {
+                        if (totalBytes > 0) {
+                            int value = 2 + (int) Math.min(53, currentBytes * 53 / totalBytes);
+                            int percent = (int) Math.min(100, currentBytes * 100 / totalBytes);
+                            updateProgress(value, "Скачивание обновления " + percent + "%");
+                        } else {
+                            updateProgress(2, "Скачивание обновления " + formatBytes(currentBytes));
+                        }
+                    }
+                });
+
+                updateProgress(56, "Распаковка обновления...");
+                unzipGitHubArchive(archiveFile, stagingDirectory, new ProgressListener() {
+                    @Override
+                    public void onProgress(long currentBytes, long totalBytes) {
+                        int value = totalBytes > 0 ? 56 + (int) Math.min(34, currentBytes * 34 / totalBytes) : 56;
+                        updateProgress(value, "Распаковка обновления...");
+                    }
+                });
+                if (!isValidLauncherApplication(stagingDirectory)) {
+                    throw new IOException("Архив обновления не содержит полноценный TinyCraftLauncher.");
+                }
+
+                File updaterScript = writeLauncherUpdaterScript(updateRoot);
+                updateProgress(95, "Обновление готово к установке");
+                prepared = true;
+                return new PreparedLauncherUpdate(updaterScript, stagingDirectory, applicationDirectory);
+            } finally {
+                Files.deleteIfExists(archiveFile.toPath());
+                if (!prepared) {
+                    deleteDirectory(stagingDirectory);
+                }
+            }
+        }
+
+        private void updateProgress(int value, String message) {
+            if (value == lastProgressValue) {
+                return;
+            }
+            lastProgressValue = value;
+            SwingUtilities.invokeLater(new Runnable() {
+                @Override
+                public void run() {
+                    statusLabel.setVisible(true);
+                    progressBar.setVisible(true);
+                    progressBar.setValue(value);
+                    progressBar.setString(message);
+                    statusLabel.setText(message);
+                }
+            });
+        }
+
+        @Override
+        protected void done() {
+            try {
+                PreparedLauncherUpdate prepared = get();
+                JOptionPane.showMessageDialog(frame,
+                        "Обновление проверено и готово. Лаунчер сейчас перезапустится.",
+                        "Обновление лаунчера", JOptionPane.INFORMATION_MESSAGE);
+                startLauncherUpdater(prepared);
+                frame.dispose();
+                System.exit(0);
+            } catch (Exception ex) {
+                launcherUpdateInProgress = false;
+                playButton.setEnabled(true);
+                launcherInfoLabel.setText("Launcher " + LAUNCHER_VERSION + " -> " + update.version + " available");
+                showError("Не удалось обновить лаунчер", ex);
+                setBusy(false, "Ошибка обновления");
+            }
+        }
+    }
+
+    private static File findPackagedApplicationDirectory() {
+        File launcherDirectory = getLauncherDirectory();
+        File applicationDirectory = launcherDirectory.getParentFile();
+        if (applicationDirectory == null) {
+            return null;
+        }
+        File executable = new File(applicationDirectory, "TinyCraftLauncher.exe");
+        File applicationJar = new File(new File(applicationDirectory, "app"), "TinyCraftLauncher.jar");
+        File runtimeJava = new File(new File(new File(applicationDirectory, "runtime"), "bin"), "java.exe");
+        return isNonEmptyFile(executable) && isNonEmptyFile(applicationJar) && isNonEmptyFile(runtimeJava)
+                ? applicationDirectory : null;
+    }
+
+    private static boolean isValidLauncherApplication(File directory) {
+        if (directory == null || !directory.isDirectory()) {
+            return false;
+        }
+        return isNonEmptyFile(new File(directory, "TinyCraftLauncher.exe"))
+                && isNonEmptyFile(new File(new File(directory, "app"), "TinyCraftLauncher.jar"))
+                && isNonEmptyFile(new File(new File(new File(directory, "runtime"), "bin"), "java.exe"));
+    }
+
+    private static File writeLauncherUpdaterScript(File updateRoot) throws IOException {
+        File script = new File(updateRoot, "apply-launcher-update.ps1");
+        String content = "param([Parameter(Mandatory=$true)][string]$Source, [Parameter(Mandatory=$true)][string]$Target)\r\n"
+                + "$ErrorActionPreference = 'Stop'\r\n"
+                + "$backup = $Target + '.previous-update'\r\n"
+                + "$log = Join-Path (Split-Path -Parent $Source) 'launcher-update.log'\r\n"
+                + "Start-Sleep -Seconds 2\r\n"
+                + "try {\r\n"
+                + "  if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }\r\n"
+                + "  $moved = $false\r\n"
+                + "  for ($attempt = 0; $attempt -lt 60; $attempt++) {\r\n"
+                + "    try { Move-Item -LiteralPath $Target -Destination $backup -ErrorAction Stop; $moved = $true; break }\r\n"
+                + "    catch { if ($attempt -eq 59) { throw }; Start-Sleep -Milliseconds 500 }\r\n"
+                + "  }\r\n"
+                + "  if (-not $moved) { throw 'Could not unlock the old launcher.' }\r\n"
+                + "  try {\r\n"
+                + "    Move-Item -LiteralPath $Source -Destination $Target -ErrorAction Stop\r\n"
+                + "    $exe = Join-Path $Target 'TinyCraftLauncher.exe'\r\n"
+                + "    if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw 'Updated launcher executable is missing.' }\r\n"
+                + "  } catch {\r\n"
+                + "    if (Test-Path -LiteralPath $Target) { Remove-Item -LiteralPath $Target -Recurse -Force }\r\n"
+                + "    Move-Item -LiteralPath $backup -Destination $Target -ErrorAction Stop\r\n"
+                + "    throw\r\n"
+                + "  }\r\n"
+                + "  Start-Process -FilePath $exe -WorkingDirectory $Target\r\n"
+                + "  if (Test-Path -LiteralPath $backup) { Remove-Item -LiteralPath $backup -Recurse -Force }\r\n"
+                + "} catch {\r\n"
+                + "  $_ | Out-File -LiteralPath $log -Encoding UTF8\r\n"
+                + "  if ((-not (Test-Path -LiteralPath $Target)) -and (Test-Path -LiteralPath $backup)) {\r\n"
+                + "    Move-Item -LiteralPath $backup -Destination $Target -ErrorAction SilentlyContinue\r\n"
+                + "  }\r\n"
+                + "  $oldExe = Join-Path $Target 'TinyCraftLauncher.exe'\r\n"
+                + "  if (Test-Path -LiteralPath $oldExe -PathType Leaf) { Start-Process -FilePath $oldExe -WorkingDirectory $Target }\r\n"
+                + "  exit 1\r\n"
+                + "}\r\n";
+        Files.write(script.toPath(), content.getBytes(StandardCharsets.UTF_8),
+                StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+        return script;
+    }
+
+    private static void startLauncherUpdater(PreparedLauncherUpdate update) throws IOException {
+        new ProcessBuilder("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
+                "-File", update.script.getAbsolutePath(),
+                "-Source", update.sourceDirectory.getAbsolutePath(),
+                "-Target", update.targetDirectory.getAbsolutePath())
+                .directory(update.script.getParentFile())
+                .start();
     }
 
     private void openLauncherReleasesPage() {
@@ -970,8 +1219,10 @@ public class Launcher {
         }
     }
 
-    private final class InstallAndRunWorker extends SwingWorker<Void, String> {
+    private final class InstallAndRunWorker extends SwingWorker<Void, Void> {
         private final GameVersion version;
+        private long lastProgressUpdateNanos;
+        private int lastProgressValue = -1;
 
         private InstallAndRunWorker(GameVersion version) {
             this.version = version;
@@ -981,12 +1232,9 @@ public class Launcher {
         protected Void doInBackground() throws Exception {
             File versionDir = getVersionDirectory(version);
             File jarFile = new File(versionDir, GAME_JAR_NAME);
+            recoverInterruptedInstall(versionDir, getPreviousVersionDirectory(version));
 
             boolean mustRefresh = forceUpdateBox.isSelected() || !isInstalledVersionValid(versionDir);
-            if (mustRefresh && versionDir.exists()) {
-                deleteDirectory(versionDir);
-            }
-
             if (mustRefresh) {
                 installVersion(version, versionDir, jarFile);
             }
@@ -995,14 +1243,6 @@ public class Launcher {
             saveProfile(versionDir, nameField.getText());
             launchGame(version, jarFile);
             return null;
-        }
-
-        @Override
-        protected void process(List<String> chunks) {
-            if (!chunks.isEmpty()) {
-                statusLabel.setVisible(true);
-                statusLabel.setText(chunks.get(chunks.size() - 1));
-            }
         }
 
         @Override
@@ -1028,6 +1268,7 @@ public class Launcher {
         }
 
         private void installVersion(GameVersion version, File versionDir, File jarFile) throws Exception {
+            validateGameDownload(version.downloadUrl, version.sha256);
             File versionsRoot = getVersionsDirectory();
             if (!versionsRoot.isDirectory() && !versionsRoot.mkdirs()) {
                 throw new IOException("Не удалось создать папку: " + versionsRoot.getAbsolutePath());
@@ -1038,8 +1279,9 @@ public class Launcher {
                 throw new IOException("Не удалось создать папку: " + downloadsDir.getAbsolutePath());
             }
 
-            File archiveFile = new File(downloadsDir, version.id + ".zip");
-            File stagingDir = new File(versionsRoot, version.id + ".install");
+            File archiveFile = new File(downloadsDir, versionDir.getName() + ".zip");
+            File stagingDir = new File(versionsRoot, versionDir.getName() + ".install");
+            File previousDir = getPreviousVersionDirectory(version);
             deleteDirectory(stagingDir);
             if (!stagingDir.mkdirs()) {
                 throw new IOException("Не удалось создать папку: " + stagingDir.getAbsolutePath());
@@ -1049,11 +1291,8 @@ public class Launcher {
             boolean installed = false;
             try {
                 progress(2, "Подготовка загрузки " + version.name + "...");
-                downloadFile(version.downloadUrl, archiveFile, 2, 55);
+                downloadFile(version.downloadUrl, version.sha256, archiveFile, 2, 55);
                 checkCancelled();
-                if (!version.sha256.isEmpty()) {
-                    verifySha256(archiveFile, version.sha256);
-                }
 
                 progress(56, "Распаковка...");
                 unzipGitHubArchive(archiveFile, stagingDir, new ProgressListener() {
@@ -1088,8 +1327,7 @@ public class Launcher {
                 }
 
                 progress(94, "Установка...");
-                deleteDirectory(versionDir);
-                Files.move(stagingDir.toPath(), versionDir.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                replaceInstalledVersion(versionDir, stagingDir, previousDir);
                 installed = true;
                 progress(100, "Версия установлена");
             } finally {
@@ -1103,6 +1341,13 @@ public class Launcher {
         }
 
         private void progress(int value, String message) {
+            long now = System.nanoTime();
+            if (value == lastProgressValue && value < 100
+                    && now - lastProgressUpdateNanos < PROGRESS_UPDATE_INTERVAL_NANOS) {
+                return;
+            }
+            lastProgressValue = value;
+            lastProgressUpdateNanos = now;
             SwingUtilities.invokeLater(new Runnable() {
                 @Override
                 public void run() {
@@ -1112,54 +1357,25 @@ public class Launcher {
                     progressBar.setString(message);
                 }
             });
-            publish(message);
         }
 
-        private void downloadFile(String sourceUrl, File targetFile, int startPercent, int endPercent) throws IOException {
-            File tempFile = new File(targetFile.getParentFile(), targetFile.getName() + ".download");
-            Files.deleteIfExists(tempFile.toPath());
-
-            URLConnection connection = URI.create(sourceUrl).toURL().openConnection();
-            connection.setConnectTimeout(15000);
-            connection.setReadTimeout(30000);
-            connection.setRequestProperty("User-Agent", "TinyCraftLauncher/1.0");
-
-            if (connection instanceof HttpURLConnection) {
-                int responseCode = ((HttpURLConnection) connection).getResponseCode();
-                if (responseCode < 200 || responseCode >= 300) {
-                    throw new IOException("Сервер вернул HTTP " + responseCode + " для " + sourceUrl);
-                }
-            }
-
-            long totalBytes = connection.getContentLengthLong();
-
-            try (InputStream in = new BufferedInputStream(connection.getInputStream());
-                 FileOutputStream out = new FileOutputStream(tempFile)) {
-                byte[] buffer = new byte[8192];
-                int read;
-                long downloaded = 0;
-
-                while ((read = in.read(buffer)) != -1) {
+        private void downloadFile(String sourceUrl, String expectedSha256, File targetFile,
+                                  int startPercent, int endPercent) throws IOException {
+            downloadSecureFile(sourceUrl, expectedSha256, targetFile, new ProgressListener() {
+                @Override
+                public void onProgress(long downloaded, long totalBytes) throws IOException {
                     checkCancelled();
-                    out.write(buffer, 0, read);
-                    downloaded += read;
-
                     if (totalBytes > 0) {
                         int range = endPercent - startPercent;
                         int value = startPercent + (int) Math.min(range, downloaded * range / totalBytes);
                         int percent = (int) Math.min(100, downloaded * 100 / totalBytes);
-                        progress(value, "Скачивание " + percent + "% (" + formatBytes(downloaded) + " / " + formatBytes(totalBytes) + ")");
+                        progress(value, "Скачивание " + percent + "% (" + formatBytes(downloaded)
+                                + " / " + formatBytes(totalBytes) + ")");
                     } else {
                         progress(startPercent, "Скачивание " + formatBytes(downloaded));
                     }
                 }
-            } finally {
-                if (connection instanceof HttpURLConnection) {
-                    ((HttpURLConnection) connection).disconnect();
-                }
-            }
-
-            Files.move(tempFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            });
         }
 
         private void checkCancelled() throws IOException {
@@ -1169,87 +1385,90 @@ public class Launcher {
         }
     }
 
-    private static boolean isHttpUrl(String sourceUrl) {
-        String lower = sourceUrl == null ? "" : sourceUrl.toLowerCase();
-        return lower.startsWith("http://") || lower.startsWith("https://");
-    }
-
-    private static boolean isWindows() {
-        return System.getProperty("os.name", "").toLowerCase().contains("win");
-    }
-
-    private static boolean downloadWithWindowsDownloader(String sourceUrl, File tempFile, File workingDir)
-            throws IOException, InterruptedException {
-        IOException curlFailure = null;
-        List<String> curl = new ArrayList<String>();
-        curl.add("curl.exe");
-        curl.add("-L");
-        curl.add("--fail");
-        curl.add("--show-error");
-        curl.add("--connect-timeout");
-        curl.add("20");
-        curl.add("--retry");
-        curl.add("2");
-        curl.add("--output");
-        curl.add(tempFile.getAbsolutePath());
-        curl.add(sourceUrl);
-        try {
-            runDownloaderCommand(curl, workingDir);
-            return tempFile.isFile() && tempFile.length() > 0;
-        } catch (IOException ex) {
-            curlFailure = ex;
-            Files.deleteIfExists(tempFile.toPath());
-        }
-
-        List<String> powershell = new ArrayList<String>();
-        powershell.add("powershell.exe");
-        powershell.add("-NoProfile");
-        powershell.add("-ExecutionPolicy");
-        powershell.add("Bypass");
-        powershell.add("-Command");
-        powershell.add("$ProgressPreference='SilentlyContinue'; [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -Uri $args[0] -OutFile $args[1]");
-        powershell.add(sourceUrl);
-        powershell.add(tempFile.getAbsolutePath());
-        try {
-            runDownloaderCommand(powershell, workingDir);
-            return tempFile.isFile() && tempFile.length() > 0;
-        } catch (IOException ex) {
-            if (curlFailure != null) {
-                ex.addSuppressed(curlFailure);
-            }
-            throw ex;
-        }
-    }
-
-    private static void runDownloaderCommand(List<String> command, File workingDir) throws IOException, InterruptedException {
-        File logFile = new File(workingDir, "download-command.log");
-        Files.write(logFile.toPath(),
-                ("Downloader: " + command.get(0) + System.lineSeparator()).getBytes(StandardCharsets.UTF_8),
-                StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-
-        ProcessBuilder builder = new ProcessBuilder(command);
-        builder.directory(workingDir);
-        builder.redirectErrorStream(true);
-        builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile));
-        Process process = builder.start();
-        int exitCode = process.waitFor();
-        if (exitCode != 0) {
-            throw new IOException("Downloader failed with exit code " + exitCode + ". Log: " + logFile.getAbsolutePath());
-        }
-    }
-
     private interface ProgressListener {
         void onProgress(long currentBytes, long totalBytes) throws IOException;
+    }
+
+    private static void downloadSecureFile(String sourceUrl, String expectedSha256, File targetFile,
+                                           ProgressListener progressListener) throws IOException {
+        validateGameDownload(sourceUrl, expectedSha256);
+        File parent = targetFile.getParentFile();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
+            throw new IOException("Не удалось создать папку: " + parent.getAbsolutePath());
+        }
+        File tempFile = new File(parent, targetFile.getName() + ".download");
+        Files.deleteIfExists(tempFile.toPath());
+        URLConnection connection = null;
+        boolean completed = false;
+        try {
+            MessageDigest digest = expectedSha256 == null || expectedSha256.isEmpty()
+                    ? null : createSha256Digest();
+            connection = openSecureConnection(sourceUrl, true);
+            validateHttpResponse(connection, sourceUrl);
+            long totalBytes = connection.getContentLengthLong();
+            if (totalBytes > MAX_DOWNLOAD_BYTES) {
+                throw new IOException("Файл слишком большой: " + formatBytes(totalBytes));
+            }
+
+            long downloaded = 0;
+            try (InputStream in = new BufferedInputStream(connection.getInputStream(), IO_BUFFER_SIZE);
+                 BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(tempFile), IO_BUFFER_SIZE)) {
+                byte[] buffer = new byte[IO_BUFFER_SIZE];
+                int read;
+                while ((read = in.read(buffer)) != -1) {
+                    downloaded += read;
+                    if (downloaded > MAX_DOWNLOAD_BYTES) {
+                        throw new IOException("Загрузка превысила безопасный размер " + formatBytes(MAX_DOWNLOAD_BYTES));
+                    }
+                    if (digest != null) {
+                        digest.update(buffer, 0, read);
+                    }
+                    out.write(buffer, 0, read);
+                    if (progressListener != null) {
+                        progressListener.onProgress(downloaded, totalBytes);
+                    }
+                }
+            }
+
+            if (totalBytes >= 0 && downloaded != totalBytes) {
+                throw new IOException("Загрузка оборвалась: ожидалось " + formatBytes(totalBytes)
+                        + ", получено " + formatBytes(downloaded));
+            }
+            if (digest != null) {
+                String actualSha256 = toHex(digest.digest());
+                if (!actualSha256.equalsIgnoreCase(expectedSha256)) {
+                    throw new IOException("SHA-256 не совпал для " + targetFile.getName() + ": " + actualSha256);
+                }
+            }
+            Files.move(tempFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            completed = true;
+        } finally {
+            if (connection instanceof HttpURLConnection) {
+                ((HttpURLConnection) connection).disconnect();
+            }
+            if (!completed) {
+                Files.deleteIfExists(tempFile.toPath());
+            }
+        }
     }
 
     private static void unzipGitHubArchive(File archiveFile, File targetDir, ProgressListener progressListener) throws IOException {
         String targetPath = targetDir.getCanonicalPath() + File.separator;
         long totalBytes = archiveFile.length();
+        long extractedBytes = 0;
+        int entryCount = 0;
 
         try (CountingInputStream input = new CountingInputStream(new FileInputStream(archiveFile));
              ZipInputStream zip = new ZipInputStream(input)) {
             ZipEntry entry;
             while ((entry = zip.getNextEntry()) != null) {
+                entryCount++;
+                if (entryCount > MAX_ARCHIVE_ENTRIES) {
+                    throw new IOException("В архиве слишком много файлов: больше " + MAX_ARCHIVE_ENTRIES);
+                }
+                if (entry.getSize() > MAX_EXTRACTED_FILE_BYTES) {
+                    throw new IOException("Файл в архиве слишком большой: " + entry.getName());
+                }
                 if (progressListener != null) {
                     progressListener.onProgress(input.getBytesRead(), totalBytes);
                 }
@@ -1277,9 +1496,15 @@ public class Launcher {
                 }
 
                 try (FileOutputStream out = new FileOutputStream(outputFile)) {
-                    byte[] buffer = new byte[8192];
+                    byte[] buffer = new byte[IO_BUFFER_SIZE];
                     int read;
+                    long extractedFileBytes = 0;
                     while ((read = zip.read(buffer)) != -1) {
+                        extractedFileBytes += read;
+                        extractedBytes += read;
+                        if (extractedFileBytes > MAX_EXTRACTED_FILE_BYTES || extractedBytes > MAX_EXTRACTED_BYTES) {
+                            throw new IOException("Архив превышает безопасный размер распаковки.");
+                        }
                         out.write(buffer, 0, read);
                         if (progressListener != null) {
                             progressListener.onProgress(input.getBytesRead(), totalBytes);
@@ -1475,7 +1700,7 @@ public class Launcher {
             jar.putNextEntry(entry);
 
             try (FileInputStream in = new FileInputStream(file)) {
-                byte[] buffer = new byte[8192];
+                byte[] buffer = new byte[IO_BUFFER_SIZE];
                 int read;
                 while ((read = in.read(buffer)) != -1) {
                     jar.write(buffer, 0, read);
@@ -1486,32 +1711,78 @@ public class Launcher {
         }
     }
 
-    private static void verifySha256(File file, String expectedSha256) throws IOException {
-        String actual = sha256(file);
-        if (!actual.equalsIgnoreCase(expectedSha256)) {
-            throw new IOException("SHA-256 не совпал для " + file.getName() + ": " + actual);
+    private static MessageDigest createSha256Digest() throws IOException {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (Exception ex) {
+            throw new IOException("SHA-256 недоступен в текущей Java.", ex);
         }
     }
 
-    private static String sha256(File file) throws IOException {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            try (InputStream input = new BufferedInputStream(new FileInputStream(file))) {
-                byte[] buffer = new byte[8192];
-                int read;
-                while ((read = input.read(buffer)) != -1) {
-                    digest.update(buffer, 0, read);
-                }
-            }
-            byte[] hash = digest.digest();
-            StringBuilder result = new StringBuilder(hash.length * 2);
-            for (byte b : hash) {
-                result.append(String.format("%02x", b & 0xff));
-            }
-            return result.toString();
-        } catch (Exception ex) {
-            throw new IOException("Не удалось посчитать SHA-256: " + file.getAbsolutePath(), ex);
+    private static String toHex(byte[] bytes) {
+        final char[] digits = "0123456789abcdef".toCharArray();
+        char[] result = new char[bytes.length * 2];
+        for (int index = 0; index < bytes.length; index++) {
+            int value = bytes[index] & 0xff;
+            result[index * 2] = digits[value >>> 4];
+            result[index * 2 + 1] = digits[value & 0x0f];
         }
+        return new String(result);
+    }
+
+    private static void validateGameDownload(String sourceUrl, String expectedSha256) throws IOException {
+        URI source = validateDownloadSource(sourceUrl, true);
+        boolean validHash = isValidSha256(expectedSha256);
+        if (expectedSha256 != null && !expectedSha256.trim().isEmpty() && !validHash) {
+            throw new IOException("Некорректный SHA-256 для загрузки " + sourceUrl);
+        }
+        if ("https".equalsIgnoreCase(source.getScheme()) && !validHash) {
+            throw new IOException("Сетевая загрузка заблокирована: для неё не указан SHA-256.");
+        }
+    }
+
+    private static boolean isValidSha256(String value) {
+        return value != null && value.matches("(?i)[0-9a-f]{64}");
+    }
+
+    private static URLConnection openSecureConnection(String sourceUrl, boolean allowLocalFile) throws IOException {
+        URI source = validateDownloadSource(sourceUrl, allowLocalFile);
+        URLConnection connection = source.toURL().openConnection();
+        connection.setConnectTimeout(15000);
+        connection.setReadTimeout(30000);
+        connection.setRequestProperty("User-Agent", "TinyCraftLauncher/" + LAUNCHER_VERSION);
+        return connection;
+    }
+
+    private static void validateHttpResponse(URLConnection connection, String sourceUrl) throws IOException {
+        if (!(connection instanceof HttpURLConnection)) {
+            return;
+        }
+        int responseCode = ((HttpURLConnection) connection).getResponseCode();
+        validateDownloadSource(connection.getURL().toString(), false);
+        if (responseCode < 200 || responseCode >= 300) {
+            throw new IOException("Сервер вернул HTTP " + responseCode + " для " + sourceUrl);
+        }
+    }
+
+    private static URI validateDownloadSource(String sourceUrl, boolean allowLocalFile) throws IOException {
+        final URI source;
+        try {
+            source = URI.create(sourceUrl == null ? "" : sourceUrl.trim());
+        } catch (IllegalArgumentException ex) {
+            throw new IOException("Некорректный адрес загрузки: " + sourceUrl, ex);
+        }
+
+        String scheme = source.getScheme();
+        if ("https".equalsIgnoreCase(scheme)) {
+            return source;
+        }
+        if (allowLocalFile && "file".equalsIgnoreCase(scheme)
+                && (source.getAuthority() == null || source.getAuthority().isEmpty())) {
+            return source;
+        }
+        throw new IOException("Небезопасный адрес загрузки: разрешены только HTTPS"
+                + (allowLocalFile ? " и локальные файлы" : "") + ".");
     }
 
     private static void deleteDirectory(File directory) throws IOException {
@@ -1534,25 +1805,123 @@ public class Launcher {
         }
     }
 
+    private static void replaceInstalledVersion(File versionDir, File stagingDir, File previousDir) throws IOException {
+        if (previousDir.exists()) {
+            throw new IOException("Не завершено предыдущее обновление: " + previousDir.getAbsolutePath());
+        }
+        if (!isInstalledVersionValid(stagingDir)) {
+            throw new IOException("Новая версия не прошла проверку комплектности: " + stagingDir.getAbsolutePath());
+        }
+
+        boolean previousMoved = false;
+        try {
+            if (versionDir.exists()) {
+                Files.move(versionDir.toPath(), previousDir.toPath());
+                previousMoved = true;
+            }
+
+            Files.move(stagingDir.toPath(), versionDir.toPath());
+            if (previousMoved) {
+                copyPreservedVersionData(previousDir, versionDir);
+            }
+        } catch (IOException | RuntimeException failure) {
+            if (previousMoved && previousDir.exists()) {
+                try {
+                    deleteDirectory(versionDir);
+                    Files.move(previousDir.toPath(), versionDir.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                } catch (IOException | RuntimeException rollbackFailure) {
+                    failure.addSuppressed(rollbackFailure);
+                }
+            }
+            throw failure;
+        }
+
+        if (previousMoved) {
+            try {
+                deleteDirectory(previousDir);
+            } catch (IOException | RuntimeException cleanupFailure) {
+                throw new IOException("Не удалось завершить очистку предыдущей версии: "
+                        + previousDir.getAbsolutePath(), cleanupFailure);
+            }
+        }
+    }
+
+    private static void recoverInterruptedInstall(File versionDir, File previousDir) throws IOException {
+        if (!previousDir.exists()) {
+            return;
+        }
+
+        if (!isInstalledVersionValid(versionDir)) {
+            deleteDirectory(versionDir);
+            Files.move(previousDir.toPath(), versionDir.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            return;
+        }
+
+        copyPreservedVersionData(previousDir, versionDir);
+        deleteDirectory(previousDir);
+    }
+
+    private static void copyPreservedVersionData(File sourceDir, File targetDir) throws IOException {
+        for (String name : PRESERVED_VERSION_DATA) {
+            File source = new File(sourceDir, name);
+            if (!source.exists()) {
+                continue;
+            }
+
+            File target = new File(targetDir, name);
+            deleteDirectory(target);
+            copyRecursively(source, target);
+        }
+    }
+
+    private static void copyRecursively(File source, File target) throws IOException {
+        if (source.isDirectory()) {
+            if (!target.isDirectory() && !target.mkdirs()) {
+                throw new IOException("Не удалось создать папку: " + target.getAbsolutePath());
+            }
+            File[] children = source.listFiles();
+            if (children == null) {
+                throw new IOException("Не удалось прочитать папку: " + source.getAbsolutePath());
+            }
+            for (File child : children) {
+                copyRecursively(child, new File(target, child.getName()));
+            }
+            return;
+        }
+
+        File parent = target.getParentFile();
+        if (parent != null && !parent.isDirectory() && !parent.mkdirs()) {
+            throw new IOException("Не удалось создать папку: " + parent.getAbsolutePath());
+        }
+        Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+    }
+
     private static void launchGame(GameVersion version, File jarFile) throws IOException {
         ensureLauncherAssets(jarFile.getParentFile());
+        JavaRuntime javaRuntime = findJavaRuntime(jarFile.getParentFile(), version.javaRelease);
         File logDir = getLogsDirectory();
         if (!logDir.isDirectory() && !logDir.mkdirs()) {
             throw new IOException("Не удалось создать папку логов: " + logDir.getAbsolutePath());
         }
         File logFile = new File(logDir, version.id + "-latest.log");
-        ProcessBuilder builder = new ProcessBuilder(
-                findJavaCommand(version.javaRelease),
-                "-Dfile.encoding=UTF-8",
-                "-Dtinycraft.home=" + jarFile.getParentFile().getAbsolutePath(),
-                "-jar",
-                jarFile.getAbsolutePath()
-        );
+        List<String> command = new ArrayList<String>();
+        command.add(javaRuntime.executable.getAbsolutePath());
+        command.add("-Dfile.encoding=UTF-8");
+        if (javaRuntime.release >= 17) {
+            command.add("--enable-native-access=ALL-UNNAMED");
+        }
+        command.add("-Dtinycraft.home=" + jarFile.getParentFile().getAbsolutePath());
+        command.add("-jar");
+        command.add(jarFile.getAbsolutePath());
+
+        ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(jarFile.getParentFile());
         builder.redirectErrorStream(true);
         builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile));
         Files.write(logFile.toPath(),
-                ("TinyCraft launch log for " + version.name + System.lineSeparator()).getBytes(StandardCharsets.UTF_8),
+                ("TinyCraft launch log for " + version.name + System.lineSeparator()
+                        + "Java " + javaRuntime.release + ": " + javaRuntime.executable.getAbsolutePath()
+                        + System.lineSeparator()).getBytes(StandardCharsets.UTF_8),
                 StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
         Process process = builder.start();
         try {
@@ -1607,33 +1976,148 @@ public class Launcher {
         Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
     }
 
-    private static String findJavaCommand(int minimumRelease) {
-        File launcherDir = getLauncherDirectory();
-        File parentDir = launcherDir.getParentFile();
-        File[] candidates = {
-                new File(new File(new File(launcherDir, "runtime"), "bin"), "java.exe"),
-                new File(new File(new File(parentDir == null ? launcherDir : parentDir, "runtime"), "bin"), "java.exe"),
-                new File(new File(new File(launcherDir, "runtime"), "bin"), "java"),
-                new File(new File(new File(parentDir == null ? launcherDir : parentDir, "runtime"), "bin"), "java")
-        };
+    private static JavaRuntime findJavaRuntime(File versionDir, int minimumRelease) throws IOException {
+        if (minimumRelease > MAX_SUPPORTED_GAME_JAVA_RELEASE) {
+            throw new IOException("Версия игры требует Java " + minimumRelease
+                    + ", но лаунчер поддерживает запуск только до Java " + MAX_SUPPORTED_GAME_JAVA_RELEASE + ".");
+        }
+
+        List<File> candidates = new ArrayList<File>();
+        addRuntimeCandidates(candidates, versionDir);
+        addLauncherRuntimeCandidates(candidates);
+        addJavaHomeCandidates(candidates, System.getenv("TINYCRAFT_JAVA_HOME"));
+        addJavaHomeCandidates(candidates, System.getenv("JAVA_HOME"));
+        addJavaHomeCandidates(candidates, System.getProperty("java.home"));
+        addPathJavaCandidates(candidates);
+        addKnownJavaCandidates(candidates);
+
+        List<String> checkedPaths = new ArrayList<String>();
+        List<String> foundVersions = new ArrayList<String>();
         for (File candidate : candidates) {
-            if (candidate.isFile() && javaReleaseAtLeast(candidate, minimumRelease)) {
-                return candidate.getAbsolutePath();
+            if (candidate == null || !candidate.isFile()) {
+                continue;
+            }
+
+            String path;
+            try {
+                path = candidate.getCanonicalPath();
+            } catch (IOException ex) {
+                path = candidate.getAbsolutePath();
+            }
+            if (containsPathIgnoreCase(checkedPaths, path)) {
+                continue;
+            }
+            checkedPaths.add(path);
+
+            try {
+                int release = detectJavaRelease(candidate);
+                foundVersions.add("Java " + release + " (" + path + ")");
+                if (isSupportedJavaRelease(release, minimumRelease)) {
+                    return new JavaRuntime(candidate.getCanonicalFile(), release);
+                }
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Проверка Java была прервана: " + path, ex);
+            } catch (Exception ignored) {
+                foundVersions.add("не удалось проверить " + path);
             }
         }
-        return "java";
+
+        int requiredRelease = Math.max(minimumRelease, MIN_SUPPORTED_GAME_JAVA_RELEASE);
+        String details = foundVersions.isEmpty() ? " Java не найдена." : " Найдено: " + String.join("; ", foundVersions);
+        throw new IOException("Не найдена поддерживаемая Java " + requiredRelease + "-"
+                + MAX_SUPPORTED_GAME_JAVA_RELEASE + ". Установите Java этого диапазона или добавьте runtime в папку версии."
+                + details);
     }
 
-    private static boolean javaReleaseAtLeast(File javaExecutable, int minimumRelease) {
-        if (minimumRelease <= 8) {
-            return javaExecutable.isFile();
+    private static boolean isSupportedJavaRelease(int release, int minimumRelease) {
+        return release >= Math.max(minimumRelease, MIN_SUPPORTED_GAME_JAVA_RELEASE)
+                && release <= MAX_SUPPORTED_GAME_JAVA_RELEASE;
+    }
+
+    private static void addRuntimeCandidates(List<File> candidates, File versionDir) {
+        if (versionDir == null) {
+            return;
         }
-        try {
-            int release = detectJavaRelease(javaExecutable);
-            return release >= minimumRelease;
-        } catch (Exception ignored) {
-            return false;
+        addJavaBinCandidates(candidates, new File(versionDir, "runtime"));
+    }
+
+    private static void addLauncherRuntimeCandidates(List<File> candidates) {
+        File launcherDir = getLauncherDirectory();
+        addJavaBinCandidates(candidates, new File(launcherDir, "runtime"));
+        File parentDir = launcherDir.getParentFile();
+        if (parentDir != null) {
+            addJavaBinCandidates(candidates, new File(parentDir, "runtime"));
         }
+    }
+
+    private static void addJavaHomeCandidates(List<File> candidates, String javaHome) {
+        if (javaHome == null || javaHome.trim().isEmpty()) {
+            return;
+        }
+        addJavaBinCandidates(candidates, new File(javaHome.trim()));
+    }
+
+    private static void addJavaBinCandidates(List<File> candidates, File javaHome) {
+        File bin = new File(javaHome, "bin");
+        candidates.add(new File(bin, "java.exe"));
+        candidates.add(new File(bin, "java"));
+    }
+
+    private static void addKnownJavaCandidates(List<File> candidates) {
+        addJavaInstallations(candidates, System.getenv("LOCALAPPDATA"), "Programs" + File.separator + "Eclipse Adoptium");
+        addJavaInstallations(candidates, System.getenv("ProgramFiles"), "Eclipse Adoptium");
+        addJavaInstallations(candidates, System.getenv("ProgramFiles"), "Java");
+        addJavaInstallations(candidates, System.getenv("ProgramFiles"), "Microsoft");
+    }
+
+    private static void addJavaInstallations(List<File> candidates, String root, String childPath) {
+        if (root == null || root.trim().isEmpty()) {
+            return;
+        }
+        File directory = new File(root, childPath);
+        File[] installations = directory.listFiles(new java.io.FileFilter() {
+            @Override
+            public boolean accept(File file) {
+                return file.isDirectory();
+            }
+        });
+        if (installations == null) {
+            return;
+        }
+        List<File> sorted = new ArrayList<File>();
+        Collections.addAll(sorted, installations);
+        Collections.sort(sorted, (left, right) -> right.getName().compareToIgnoreCase(left.getName()));
+        for (File installation : sorted) {
+            addJavaBinCandidates(candidates, installation);
+        }
+    }
+
+    private static void addPathJavaCandidates(List<File> candidates) {
+        String path = System.getenv("PATH");
+        if (path == null || path.trim().isEmpty()) {
+            return;
+        }
+        for (String entry : path.split(java.util.regex.Pattern.quote(File.pathSeparator))) {
+            String directory = entry.trim();
+            if (directory.startsWith("\"") && directory.endsWith("\"") && directory.length() > 1) {
+                directory = directory.substring(1, directory.length() - 1);
+            }
+            if (directory.isEmpty()) {
+                continue;
+            }
+            candidates.add(new File(directory, "java.exe"));
+            candidates.add(new File(directory, "java"));
+        }
+    }
+
+    private static boolean containsPathIgnoreCase(List<String> paths, String candidate) {
+        for (String path : paths) {
+            if (path.equalsIgnoreCase(candidate)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int detectJavaRelease(File javaExecutable) throws IOException, InterruptedException {
@@ -1760,8 +2244,21 @@ public class Launcher {
     }
 
     private static File getVersionDirectory(GameVersion version) {
-        String folderName = version.id == null || version.id.trim().isEmpty() ? sanitizeFileName(version.name) : sanitizeFileName(version.id);
-        return new File(getVersionsDirectory(), folderName);
+        if (version == null) {
+            throw new IllegalArgumentException("Версия не указана.");
+        }
+        String folderName = requireSafeVersionId(version.id);
+        Path versionsRoot = getVersionsDirectory().toPath().toAbsolutePath().normalize();
+        Path versionPath = versionsRoot.resolve(folderName).normalize();
+        if (!versionPath.startsWith(versionsRoot) || versionPath.equals(versionsRoot)) {
+            throw new IllegalArgumentException("Небезопасный ID версии: " + version.id);
+        }
+        return versionPath.toFile();
+    }
+
+    private static File getPreviousVersionDirectory(GameVersion version) {
+        File versionDir = getVersionDirectory(version);
+        return new File(versionDir.getParentFile(), versionDir.getName() + ".previous");
     }
 
     private static File getLauncherSettingsFile() {
@@ -1888,11 +2385,9 @@ public class Launcher {
 
     private static List<GameVersion> downloadManifest(String manifestUrl) throws IOException {
         List<GameVersion> result = new ArrayList<GameVersion>();
-        URI manifestUri = URI.create(manifestUrl);
-        URLConnection connection = manifestUri.toURL().openConnection();
-        connection.setConnectTimeout(15000);
-        connection.setReadTimeout(30000);
-        connection.setRequestProperty("User-Agent", "TinyCraftLauncher/1.0");
+        URI manifestUri = validateDownloadSource(manifestUrl, true);
+        URLConnection connection = openSecureConnection(manifestUrl, true);
+        validateHttpResponse(connection, manifestUrl);
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
@@ -1903,17 +2398,21 @@ public class Launcher {
                 }
 
                 String[] parts = line.split("\\|", -1);
-                if (parts.length >= 7) {
-                    result.add(new GameVersion(parts[0].trim(), parts[1].trim(), parts[2].trim(), parseJavaRelease(parts[3]),
-                            parts[4].trim(), parts[5].trim(), resolveManifestUrl(manifestUri, parts[6].trim())));
-                } else if (parts.length == 4) {
-                    String name = parts[0].trim();
-                    result.add(new GameVersion(toVersionId(name), name, parts[1].trim(), parseJavaRelease(parts[2]),
-                            defaultMainClass(name), "", resolveManifestUrl(manifestUri, parts[3].trim())));
-                } else if (parts.length == 3) {
-                    String name = parts[0].trim();
-                    result.add(new GameVersion(toVersionId(name), name, parts[1].trim(), 8,
-                            defaultMainClass(name), "", resolveManifestUrl(manifestUri, parts[2].trim())));
+                try {
+                    if (parts.length >= 7) {
+                        result.add(new GameVersion(parts[0].trim(), parts[1].trim(), parts[2].trim(), parseJavaRelease(parts[3]),
+                                parts[4].trim(), parts[5].trim(), resolveManifestUrl(manifestUri, parts[6].trim())));
+                    } else if (parts.length == 4) {
+                        String name = parts[0].trim();
+                        result.add(new GameVersion(toVersionId(name), name, parts[1].trim(), parseJavaRelease(parts[2]),
+                                defaultMainClass(name), "", resolveManifestUrl(manifestUri, parts[3].trim())));
+                    } else if (parts.length == 3) {
+                        String name = parts[0].trim();
+                        result.add(new GameVersion(toVersionId(name), name, parts[1].trim(), 8,
+                                defaultMainClass(name), "", resolveManifestUrl(manifestUri, parts[2].trim())));
+                    }
+                } catch (IllegalArgumentException ex) {
+                    throw new IOException("Некорректная запись manifest: " + line, ex);
                 }
             }
         } finally {
@@ -1982,14 +2481,35 @@ public class Launcher {
         return result;
     }
 
-    private static String sanitizeFileName(String value) {
-        return value.replaceAll("[\\\\/:*?\"<>|]", "_").trim();
+    private static String requireSafeVersionId(String value) {
+        String id = value == null ? "" : value.trim();
+        if (!id.matches("[A-Za-z0-9][A-Za-z0-9._-]{0,63}") || isWindowsReservedName(id)) {
+            throw new IllegalArgumentException("Небезопасный ID версии: " + value);
+        }
+        return id;
+    }
+
+    private static boolean isWindowsReservedName(String value) {
+        String upper = value.toUpperCase(java.util.Locale.ROOT);
+        int dot = upper.indexOf('.');
+        String base = dot >= 0 ? upper.substring(0, dot) : upper;
+        return "CON".equals(base) || "PRN".equals(base) || "AUX".equals(base) || "NUL".equals(base)
+                || base.matches("COM[1-9]") || base.matches("LPT[1-9]");
     }
 
     private static String toVersionId(String name) {
-        String id = name.toLowerCase().replaceAll("[^a-z0-9]+", "-");
+        String id = (name == null ? "" : name.toLowerCase(java.util.Locale.ROOT)).replaceAll("[^a-z0-9]+", "-");
         id = id.replaceAll("^-+", "").replaceAll("-+$", "");
-        return id.isEmpty() ? "version" : id;
+        if (id.length() > 64) {
+            id = id.substring(0, 64).replaceAll("-+$", "");
+        }
+        if (id.isEmpty()) {
+            id = "version";
+        }
+        if (isWindowsReservedName(id)) {
+            id = "version-" + id;
+        }
+        return requireSafeVersionId(id);
     }
 
     private static String defaultMainClass(String name) {
@@ -2042,12 +2562,20 @@ public class Launcher {
         }
 
         File jarFile = new File(versionDir, GAME_JAR_NAME);
-        if (!jarFile.isFile()) {
+        if (!isRunnableGameJar(jarFile)) {
             return false;
         }
 
-        if (!new File(versionDir, "run-game.bat").isFile()) {
-            return false;
+        String[] requiredFiles = {
+                "run-game.bat",
+                "ChunkShader.vsh",
+                "ChunkShader.fsh",
+                "terrain.png"
+        };
+        for (String requiredFile : requiredFiles) {
+            if (!isNonEmptyFile(new File(versionDir, requiredFile))) {
+                return false;
+            }
         }
 
         File libDir = new File(versionDir, "lib");
@@ -2057,7 +2585,75 @@ public class Launcher {
                 return file.isFile() && file.getName().toLowerCase().endsWith(".jar");
             }
         }) : null;
-        return libs != null && libs.length > 0;
+        return libs != null
+                && hasCoreLwjglLibrary(libs)
+                && hasLibrary(libs, "lwjgl-glfw-")
+                && hasLibrary(libs, "lwjgl-opengl-")
+                && hasLibrary(libs, "lwjgl-stb-")
+                && hasCoreWindowsNativeLibrary(libs)
+                && hasWindowsNativeLibrary(libs, "lwjgl-glfw-")
+                && hasWindowsNativeLibrary(libs, "lwjgl-opengl-")
+                && hasWindowsNativeLibrary(libs, "lwjgl-stb-");
+    }
+
+    private static boolean isRunnableGameJar(File jarFile) {
+        if (!isNonEmptyFile(jarFile)) {
+            return false;
+        }
+        try (java.util.jar.JarFile jar = new java.util.jar.JarFile(jarFile)) {
+            Manifest manifest = jar.getManifest();
+            if (manifest == null) {
+                return false;
+            }
+            String mainClass = manifest.getMainAttributes().getValue(Attributes.Name.MAIN_CLASS);
+            return mainClass != null && jar.getJarEntry(mainClass.replace('.', '/') + ".class") != null;
+        } catch (IOException | RuntimeException ex) {
+            return false;
+        }
+    }
+
+    private static boolean isNonEmptyFile(File file) {
+        return file.isFile() && file.length() > 0;
+    }
+
+    private static boolean hasLibrary(File[] libraries, String prefix) {
+        for (File library : libraries) {
+            String name = library.getName().toLowerCase(java.util.Locale.ROOT);
+            if (name.startsWith(prefix) && !name.contains("natives") && library.length() > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasCoreLwjglLibrary(File[] libraries) {
+        for (File library : libraries) {
+            String name = library.getName().toLowerCase(java.util.Locale.ROOT);
+            if (name.matches("lwjgl-[0-9].*\\.jar") && library.length() > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasCoreWindowsNativeLibrary(File[] libraries) {
+        for (File library : libraries) {
+            String name = library.getName().toLowerCase(java.util.Locale.ROOT);
+            if (name.matches("lwjgl-[0-9].*-natives-windows[^/]*\\.jar") && library.length() > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasWindowsNativeLibrary(File[] libraries, String prefix) {
+        for (File library : libraries) {
+            String name = library.getName().toLowerCase(java.util.Locale.ROOT);
+            if (name.startsWith(prefix) && name.contains("natives-windows") && library.length() > 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isCorruptedLauncherBuildFailure(Throwable cause) {
@@ -2100,7 +2696,29 @@ public class Launcher {
             this.version = version == null ? "" : version.trim();
             this.description = description == null ? "" : description.trim();
             this.downloadUrl = downloadUrl == null ? "" : downloadUrl.trim();
-            this.sha256 = sha256 == null ? "" : sha256.trim().toLowerCase();
+            this.sha256 = sha256 == null ? "" : sha256.trim().toLowerCase(java.util.Locale.ROOT);
+        }
+    }
+
+    private static final class PreparedLauncherUpdate {
+        private final File script;
+        private final File sourceDirectory;
+        private final File targetDirectory;
+
+        private PreparedLauncherUpdate(File script, File sourceDirectory, File targetDirectory) {
+            this.script = script;
+            this.sourceDirectory = sourceDirectory;
+            this.targetDirectory = targetDirectory;
+        }
+    }
+
+    private static final class JavaRuntime {
+        private final File executable;
+        private final int release;
+
+        private JavaRuntime(File executable, int release) {
+            this.executable = executable;
+            this.release = release;
         }
     }
 
@@ -2118,7 +2736,7 @@ public class Launcher {
         }
 
         private GameVersion(String id, String name, String type, int javaRelease, String mainClass, String sha256, String downloadUrl) {
-            this.id = id == null || id.trim().isEmpty() ? toVersionId(name) : id.trim();
+            this.id = requireSafeVersionId(id == null || id.trim().isEmpty() ? toVersionId(name) : id.trim());
             this.name = name;
             this.type = type;
             this.javaRelease = javaRelease;
