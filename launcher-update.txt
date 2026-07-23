@@ -1,2 +1,2 @@
 # version|description|https-url|sha256
-v1.2.3|Исправление запуска исторических версий TinyCraft|https://github.com/vakisnn-gd/TinyCraftLauncher/releases/download/launcher-v1.2.3/TinyCraftLauncher-windows.zip|52684fe470bf89120da0f3b7e7d658957a049b13b9cd400ac66011cb4f43d6b0
+v1.2.4|Исправление OpenGL в TinyCraft Snapshot 5-8 и v0.2 Final|https://github.com/vakisnn-gd/TinyCraftLauncher/releases/download/launcher-v1.2.4/TinyCraftLauncher-windows.zip|60e3845c35fee8ee5128621691261374cd528b227dbe4bda77b6a6652a75e8ad
