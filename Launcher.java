@@ -101,7 +101,7 @@ public class Launcher {
     private static final String VERSIONS_DIRECTORY_NAME = "versions";
     private static final String LOGS_DIRECTORY_NAME = "logs";
     private static final String LAUNCHER_SETTINGS_FILE = "launcher.properties";
-    private static final String LAUNCHER_VERSION = "v1.2.2";
+    private static final String LAUNCHER_VERSION = "v1.2.3";
     private static final String LAUNCHER_RELEASES_URL = "https://github.com/vakisnn-gd/TinyCraftLauncher/releases";
     private static final String LAUNCHER_UPDATE_MANIFEST_URL =
             "https://raw.githubusercontent.com/vakisnn-gd/TinyCraftLauncher/main/launcher-update.txt";
@@ -1897,7 +1897,6 @@ public class Launcher {
     }
 
     private static void launchGame(GameVersion version, File jarFile) throws IOException {
-        ensureLauncherAssets(jarFile.getParentFile());
         JavaRuntime javaRuntime = findJavaRuntime(jarFile.getParentFile(), version.javaRelease);
         File logDir = getLogsDirectory();
         if (!logDir.isDirectory() && !logDir.mkdirs()) {
@@ -1936,44 +1935,6 @@ public class Launcher {
             Thread.currentThread().interrupt();
             throw new IOException("Запуск был прерван. Лог: " + logFile.getAbsolutePath(), ex);
         }
-    }
-
-    private static void ensureLauncherAssets(File versionDir) throws IOException {
-        copyBundledAssetIfMissing(versionDir, "ChunkShader.vsh");
-        copyBundledAssetIfMissing(versionDir, "ChunkShader.fsh");
-        copyBundledAssetIfMissing(versionDir, "terrain.png");
-    }
-
-    private static void copyBundledAssetIfMissing(File versionDir, String assetName) throws IOException {
-        File target = new File(versionDir, assetName);
-        if (target.isFile()) {
-            return;
-        }
-
-        File launcherDir = getLauncherDirectory();
-        File source = new File(launcherDir, assetName);
-        if (!source.isFile()) {
-            File parent = launcherDir.getParentFile();
-            if (parent != null) {
-                source = new File(parent, assetName);
-                if (!source.isFile()) {
-                    File grandParent = parent.getParentFile();
-                    if (grandParent != null) {
-                        source = new File(grandParent, assetName);
-                    }
-                }
-            }
-        }
-
-        if (!source.isFile()) {
-            throw new IOException("Не найден ресурс " + assetName + " для запуска игры.");
-        }
-
-        File parentDir = target.getParentFile();
-        if (parentDir != null && !parentDir.isDirectory() && !parentDir.mkdirs()) {
-            throw new IOException("Не удалось создать папку: " + parentDir.getAbsolutePath());
-        }
-        Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
     }
 
     private static JavaRuntime findJavaRuntime(File versionDir, int minimumRelease) throws IOException {

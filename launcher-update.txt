@@ -1,2 +1,2 @@
 # version|description|https-url|sha256
-v1.2.2|Исправление загрузки TinyCraft v0.2.1 и старых версий|https://github.com/vakisnn-gd/TinyCraftLauncher/releases/download/launcher-v1.2.2/TinyCraftLauncher-windows.zip|0e467c5939d10eaf0ad623bb915ff4e70a7f500a587c92355fa6c41ac1968862
+v1.2.3|Исправление запуска исторических версий TinyCraft|https://github.com/vakisnn-gd/TinyCraftLauncher/releases/download/launcher-v1.2.3/TinyCraftLauncher-windows.zip|52684fe470bf89120da0f3b7e7d658957a049b13b9cd400ac66011cb4f43d6b0
