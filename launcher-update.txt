@@ -1,2 +1,2 @@
 # version|description|https-url|sha256
-v1.2.4|Исправление OpenGL в TinyCraft Snapshot 5-8 и v0.2 Final|https://github.com/vakisnn-gd/TinyCraftLauncher/releases/download/launcher-v1.2.4/TinyCraftLauncher-windows.zip|60e3845c35fee8ee5128621691261374cd528b227dbe4bda77b6a6652a75e8ad
+v1.2.1|Все исправления загрузки и запуска исторических версий TinyCraft|https://github.com/vakisnn-gd/TinyCraftLauncher/releases/download/launcher-v1.2.1/TinyCraftLauncher-windows.zip|a444f118fc672a1a318bbf7e2de1b6cf4ff5350de56a69c0a6390ae77a121d37

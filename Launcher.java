@@ -101,7 +101,7 @@ public class Launcher {
     private static final String VERSIONS_DIRECTORY_NAME = "versions";
     private static final String LOGS_DIRECTORY_NAME = "logs";
     private static final String LAUNCHER_SETTINGS_FILE = "launcher.properties";
-    private static final String LAUNCHER_VERSION = "v1.2.4";
+    private static final String LAUNCHER_VERSION = "v1.2.1";
     private static final String LAUNCHER_RELEASES_URL = "https://github.com/vakisnn-gd/TinyCraftLauncher/releases";
     private static final String LAUNCHER_UPDATE_MANIFEST_URL =
             "https://raw.githubusercontent.com/vakisnn-gd/TinyCraftLauncher/main/launcher-update.txt";
@@ -150,11 +150,11 @@ public class Launcher {
      */
     private static final GameVersion[] LOCAL_VERSIONS = {
             new GameVersion("v0.2.1", "v0.2.1", "release", 8, MAIN_CLASS, "cce07d997cf986f2dfbbd4d2e7fc14234c9e67b909c3ee052628b7bad87f8116", releaseAssetUrl("v0.2.1", "TinyCraft-v0.2.1-windows.zip")),
-            new GameVersion("v0.2-final", "v0.2 Final", "release", 8, MAIN_CLASS, "7323e8f17c8185e8bfca82efb787d47bd5d831918a5caec0c168561982a27a17", releaseAssetUrl("v0.2", "TinyCraft-v0.2-final-windows.zip")),
-            new GameVersion("v0.2-snapshot8", "v0.2 Snapshot 8", "snapshot", 8, MAIN_CLASS, "73aa410347b9ca0e31d62c7c32b81cf1cc588524c947f5e185e602bb7c5919d4", releaseAssetUrl("v0.2-snapshot8", "TinyMinecraft-v0.2-snapshot8-windows.zip")),
-            new GameVersion("v0.2-snapshot7", "v0.2 Snapshot 7", "snapshot", 17, MAIN_CLASS, "2628d90b7180f696e8c0783f81bf390caa308e4c58a91691570dda4d75f5a37e", releaseAssetUrl("v0.2-snapshot7", "TinyMinecraft-v0.2-snapshot7-windows.zip")),
-            new GameVersion("v0.2-snapshot6", "v0.2 Snapshot 6", "snapshot", 17, MAIN_CLASS, "4d5af94a064dbfb2b791802a0140d2dabb024d123b95f5b06e9671614a6ad124", releaseAssetUrl("v0.2-snapshot6", "TinyMinecraft-v0.2-snapshot6-windows.zip")),
-            new GameVersion("v0.2-snapshot5", "v0.2 Snapshot 5", "snapshot", 17, MAIN_CLASS, "5c0f74099cc35d256116448a10803803c827b1e10e6911ce75cf36e64cff608d", releaseAssetUrl("v0.2-snapshot5", "TinyMinecraft-v0.2-snapshot5-windows.zip")),
+            new GameVersion("v0.2-final", "v0.2 Final", "release", 8, MAIN_CLASS, "0986dd3cbbcc93368ed2014a7804ab71f7bc1eccb736347a3364670698bcf254", releaseAssetUrl("v0.2", "TinyCraft-v0.2-final-windows.zip")),
+            new GameVersion("v0.2-snapshot8", "v0.2 Snapshot 8", "snapshot", 8, MAIN_CLASS, "dba81895c9c70ce43021989f8c3cdb43f75bcd05ae5e56b621b8ab344c9a3b20", releaseAssetUrl("v0.2-snapshot8", "TinyMinecraft-v0.2-snapshot8-windows.zip")),
+            new GameVersion("v0.2-snapshot7", "v0.2 Snapshot 7", "snapshot", 17, MAIN_CLASS, "d98a4c1b5dea0b4b60a1297a26357968c77a3a05881669fac36c5d1221029a7a", releaseAssetUrl("v0.2-snapshot7", "TinyMinecraft-v0.2-snapshot7-windows.zip")),
+            new GameVersion("v0.2-snapshot6", "v0.2 Snapshot 6", "snapshot", 17, MAIN_CLASS, "ef7d0cfec2168c31c7f99061d6cde4b6ab8e57c146eb94ca7c401cc634d9b19b", releaseAssetUrl("v0.2-snapshot6", "TinyMinecraft-v0.2-snapshot6-windows.zip")),
+            new GameVersion("v0.2-snapshot5", "v0.2 Snapshot 5", "snapshot", 17, MAIN_CLASS, "1af29297a224ff0475fa962e9e4eeffdb10e63d976e184795efd2160517557c5", releaseAssetUrl("v0.2-snapshot5", "TinyMinecraft-v0.2-snapshot5-windows.zip")),
             new GameVersion("v0.2-snapshot4", "v0.2 Snapshot 4", "snapshot", 17, MAIN_CLASS, "d4f5acfad243e263d8977a724cebf224d4b075723389ca04a958e28e144c5f95", releaseAssetUrl("v0.2-snapshot4", "TinyMinecraft-v0.2-snapshot4-windows.zip")),
             new GameVersion("v0.2-snapshot3", "v0.2 Snapshot 3", "snapshot", 17, MAIN_CLASS, "677795e3acbaa40a27c9993640de90f155d0d10f35058e0aa5b15847e67ae9da", releaseAssetUrl("snapshot-0.2-v3", "TinyMinecraft-v0.2-snapshot3-windows.zip")),
             new GameVersion("v0.2-snapshot2", "v0.2 Snapshot 2", "snapshot", 17, MAIN_CLASS, "dfb4943984b5f660c7240de350f564fd3edaf1a0ed1160bde26e16f65ef21075", releaseAssetUrl("v0.2-snapshot2", "TinyMinecraft-v0.2-snapshot2-windows.zip")),
