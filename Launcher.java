@@ -101,7 +101,7 @@ public class Launcher {
     private static final String VERSIONS_DIRECTORY_NAME = "versions";
     private static final String LOGS_DIRECTORY_NAME = "logs";
     private static final String LAUNCHER_SETTINGS_FILE = "launcher.properties";
-    private static final String LAUNCHER_VERSION = "v1.2.1";
+    private static final String LAUNCHER_VERSION = "v1.2.2";
     private static final String LAUNCHER_RELEASES_URL = "https://github.com/vakisnn-gd/TinyCraftLauncher/releases";
     private static final String LAUNCHER_UPDATE_MANIFEST_URL =
             "https://raw.githubusercontent.com/vakisnn-gd/TinyCraftLauncher/main/launcher-update.txt";
@@ -149,7 +149,7 @@ public class Launcher {
      * GitHub сам отдает zip для каждого тега по такому адресу.
      */
     private static final GameVersion[] LOCAL_VERSIONS = {
-            new GameVersion("v0.2.1", "v0.2.1", "release", 8, MAIN_CLASS, "77f362e3100ed568268c51b4a22171d7adcd5fa447dd7a6e32c6a6a70d93367a", releaseAssetUrl("v0.2.1", "TinyCraft-v0.2.1-windows.zip")),
+            new GameVersion("v0.2.1", "v0.2.1", "release", 8, MAIN_CLASS, "cce07d997cf986f2dfbbd4d2e7fc14234c9e67b909c3ee052628b7bad87f8116", releaseAssetUrl("v0.2.1", "TinyCraft-v0.2.1-windows.zip")),
             new GameVersion("v0.2-final", "v0.2 Final", "release", 8, MAIN_CLASS, "0253e6367e94025e799b32c4c7de99d152eb91d8a22c0ab3c413fe42ee48d88e", releaseAssetUrl("v0.2", "TinyCraft-v0.2-final-windows.zip")),
             new GameVersion("v0.2-snapshot8", "v0.2 Snapshot 8", "snapshot", 8, MAIN_CLASS, "8b893bc7914fc5708787bd5bbc70cc03e486e9339057da4b166fdca72dca1164", releaseAssetUrl("v0.2-snapshot8", "TinyMinecraft-v0.2-snapshot8-windows.zip")),
             new GameVersion("v0.2-snapshot7", "v0.2 Snapshot 7", "snapshot", 17, MAIN_CLASS, "0de8e79d6dacadf7603ff0d484433c17831bcedf2f452d69bab5d6991556114b", releaseAssetUrl("v0.2-snapshot7", "TinyMinecraft-v0.2-snapshot7-windows.zip")),
@@ -2564,18 +2564,6 @@ public class Launcher {
         File jarFile = new File(versionDir, GAME_JAR_NAME);
         if (!isRunnableGameJar(jarFile)) {
             return false;
-        }
-
-        String[] requiredFiles = {
-                "run-game.bat",
-                "ChunkShader.vsh",
-                "ChunkShader.fsh",
-                "terrain.png"
-        };
-        for (String requiredFile : requiredFiles) {
-            if (!isNonEmptyFile(new File(versionDir, requiredFile))) {
-                return false;
-            }
         }
 
         File libDir = new File(versionDir, "lib");

@@ -26,6 +26,7 @@ public final class LauncherInstallTest {
             preservesUserDataDuringReplacement(testRoot);
             restoresOldVersionWhenReplacementFails(testRoot);
             rejectsIncompleteStagingBeforeReplacement(testRoot);
+            acceptsLegacyVersionWithoutModernAssets(testRoot);
             recoversInterruptedReplacement(testRoot);
             restoresPreviousVersionWhenInterruptedReplacementIsInvalid(testRoot);
             System.out.println("LauncherInstallTest: OK");
@@ -83,7 +84,7 @@ public final class LauncherInstallTest {
         File previous = new File(root, "incomplete.previous");
         createValidVersion(version, "old-complete");
         createValidVersion(staging, "new-incomplete");
-        Files.delete(new File(staging, "terrain.png").toPath());
+        Files.delete(new File(staging, "lib/lwjgl-opengl-3.3.3.jar").toPath());
 
         boolean failed = false;
         try {
@@ -95,6 +96,20 @@ public final class LauncherInstallTest {
         assertTrue(failed, "incomplete staging directory was installed");
         assertJarMarker(new File(version, "TinyCraft.jar"), "old-complete");
         assertFalse(previous.exists(), "complete version was moved before validation");
+    }
+
+    private static void acceptsLegacyVersionWithoutModernAssets(File root) throws Exception {
+        File version = new File(root, "legacy-assets");
+        createValidVersion(version, "legacy");
+        Files.delete(new File(version, "run-game.bat").toPath());
+        Files.delete(new File(version, "ChunkShader.vsh").toPath());
+        Files.delete(new File(version, "ChunkShader.fsh").toPath());
+        Files.delete(new File(version, "terrain.png").toPath());
+
+        Method method = Launcher.class.getDeclaredMethod("isInstalledVersionValid", File.class);
+        method.setAccessible(true);
+        assertTrue((Boolean) method.invoke(null, version),
+                "legacy version without modern external assets was rejected");
     }
 
     private static void recoversInterruptedReplacement(File root) throws Exception {
